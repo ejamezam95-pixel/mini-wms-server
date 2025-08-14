@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mini WMS</title>
+</head>
+<body>
+  <h1>Welcome to Mini Warehouse Management System</h1>
+  <p>Manage your warehouse stock efficiently.</p>
+  <ul>
+    <li><a href="/stock-in.html">Stock In</a></li>
+    <li><a href="/stock-out.html">Stock Out</a></li>
+    <li><a href="/history.html">History</a></li>
+  </ul>
+</body>
+</html>

@@ -1,60 +1,70 @@
+// server.js
 const express = require('express');
-const bodyParser = require('body-parser');
-const cors = require('cors');
-
 const app = express();
-const PORT = 10000;
+const PORT = process.env.PORT || 10000;
 
-app.use(cors());
-app.use(bodyParser.json());
-app.use(express.static('public'));
+// Middleware
+app.use(express.json()); // untuk parse JSON dari frontend
+app.use(express.static('public')); // serve folder public (index.html & assets)
 
+// Simpan stock dan history dalam memory (untuk simple demo)
 let stock = [];
 let history = [];
 
-// Get current stock
-app.get('/api/stock', (req, res) => {
-  res.json(stock);
-});
+// ========================
+// API Endpoints
+// ========================
 
-// Get outbound history
-app.get('/api/history', (req, res) => {
-  res.json(history);
-});
-
-// Stock In
-app.post('/api/stock-in', (req, res) => {
+// Tambah stock (Inbound)
+app.post('/api/stock/in', (req, res) => {
   const { name, quantity, expiry } = req.body;
-  if (!name || !quantity || !expiry) return res.status(400).json({ error: 'Fill all fields' });
+  if (!name || !quantity || !expiry) {
+    return res.status(400).json({ message: 'All fields are required' });
+  }
 
   stock.push({ name, quantity, expiry });
-  stock.sort((a, b) => new Date(a.expiry) - new Date(b.expiry)); // FEFO
-  res.json({ message: 'Stock added', stock });
+  // FEFO: sort by earliest expiry first
+  stock.sort((a, b) => new Date(a.expiry) - new Date(b.expiry));
+  return res.json({ message: 'Stock added', stock });
 });
 
-// Stock Out
-app.post('/api/stock-out', (req, res) => {
-  let { name, quantity } = req.body;
-  if (!name || !quantity) return res.status(400).json({ error: 'Select item and quantity' });
+// Keluarkan stock (Outbound)
+app.post('/api/stock/out', (req, res) => {
+  const { name, quantity } = req.body;
+  if (!name || !quantity) {
+    return res.status(400).json({ message: 'Item name and quantity required' });
+  }
 
+  let qtyToRemove = quantity;
   stock.sort((a, b) => new Date(a.expiry) - new Date(b.expiry)); // FEFO
-  for (let i = 0; i < stock.length && quantity > 0; i++) {
+  for (let i = 0; i < stock.length && qtyToRemove > 0; i++) {
     if (stock[i].name === name) {
-      if (stock[i].quantity <= quantity) {
-        quantity -= stock[i].quantity;
+      if (stock[i].quantity <= qtyToRemove) {
+        qtyToRemove -= stock[i].quantity;
         stock.splice(i, 1);
         i--;
       } else {
-        stock[i].quantity -= quantity;
-        quantity = 0;
+        stock[i].quantity -= qtyToRemove;
+        qtyToRemove = 0;
       }
     }
   }
 
-  history.push({ name, quantity: req.body.quantity, date: new Date().toLocaleString() });
-  res.json({ message: 'Stock removed', stock, history });
+  history.push({ name, quantity, date: new Date().toLocaleString() });
+  return res.json({ message: 'Stock removed', stock, history });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server berjalan pada port ${PORT}`);
+// Ambil stock semasa
+app.get('/api/stock', (req, res) => {
+  return res.json({ stock });
 });
+
+// Ambil history outbound
+app.get('/api/history', (req, res) => {
+  return res.json({ history });
+});
+
+// ========================
+// Start Server
+// ========================
+app.listen(PORT, () => console.log(`Server berjalan pada port ${PORT}`));
