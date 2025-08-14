@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mini WMS</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; background: #f6f7fb; }
+    .wrap { max-width: 1000px; margin: auto; }
+    h1 { margin-bottom: 8px; }
+    .card { background: #fff; padding: 14px; border-radius: 10px; box-shadow: 0 1px 3px rgba(2,6,23,0.06); margin-bottom: 16px; }
+    label { display:block; font-size:12px; color:#6b7280; margin:6px 0 4px }
+    input, select, button { padding: 8px; border-radius: 6px; border: 1px solid #e6e9ef; font-size: 14px; }
+    button { background:#0b5fff; color:#fff; border:0; cursor:pointer }
+    table { width:100%; border-collapse:collapse; font-size:13px }
+    th,td { padding:8px; border-bottom:1px solid #f1f3f7; text-align:left }
+    th { color:#6b7280; font-weight:600; font-size:12px }
+    .row { display:flex; gap:8px; align-items:center; flex-wrap: wrap; }
+    .cols-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    @media (max-width: 800px){ .cols-2{ grid-template-columns:1fr } }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Mini WMS</h1>
+  <div class="card">
+    <div class="cols-2">
+      <div>
+        <h3 style="margin:0 0 8px">Inbound (Stock In)</h3>
+        <label>Item Name</label>
+        <input id="in_name" placeholder="e.g. USB Charger 20W" />
+        <label>Quantity</label>
+        <input id="in_qty" type="number" placeholder="e.g. 10" />
+        <label>Expiry Date</label>
+        <input id="in_exp" type="date" />
+        <div class="row" style="margin-top:8px">
+          <button onclick="stockIn()">Add Stock</button>
+        </div>
+      </div>
+      <div>
+        <h3 style="margin:0 0 8px">Outbound (Stock Out)</h3>
+        <label>Item</label>
+        <select id="out_name"></select>
+        <label>Quantity</label>
+        <input id="out_qty" type="number" placeholder="e.g. 5" />
+        <div class="row" style="margin-top:8px">
+          <button onclick="stockOut()">Remove Stock</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin:0 0 8px">Current Stock (FEFO order)</h3>
+    <table id="tblStock">
+      <thead><tr><th>Item</th><th>Qty</th><th>Expiry</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3 style="margin:0 0 8px">Outbound History</h3>
+    <table id="tblHist">
+      <thead><tr><th>Item</th><th>Qty</th><th>Date</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+async function refresh() {
+  // Stock
+  const s = await fetch('/api/stock').then(r=>r.json());
+  const stock = Array.isArray(s) ? s : (s.stock || []);
+  const tb = document.querySelector('#tblStock tbody');
+  tb.innerHTML = '';
+  const sel = document.getElementById('out_name');
+  sel.innerHTML = '';
+  // group by item name + show per lot row (simple: each push is a row)
+  stock.forEach(row => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${row.name}</td><td>${row.quantity}</td><td>${row.expiry}</td>`;
+    tb.appendChild(tr);
+  });
+  // fill select options (unique names)
+  [...new Set(stock.map(x=>x.name))].forEach(n=>{
+    const opt = document.createElement('option'); opt.value = n; opt.textContent = n; sel.appendChild(opt);
+  });
+
+  // History
+  const h = await fetch('/api/history').then(r=>r.json());
+  const hist = Array.isArray(h) ? h : (h.history || []);
+  const hb = document.querySelector('#tblHist tbody');
+  hb.innerHTML = '';
+  hist.forEach(x => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${x.name}</td><td>${x.quantity}</td><td>${x.date}</td>`;
+    hb.appendChild(tr);
+  });
+}
+
+async function stockIn() {
+  const name = document.getElementById('in_name').value.trim();
+  const quantity = parseInt(document.getElementById('in_qty').value || '0', 10);
+  const expiry = document.getElementById('in_exp').value;
+  if(!name || !quantity || !expiry){ alert('Please fill item, qty, expiry'); return; }
+  const res = await fetch('/api/stock-in', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ name, quantity, expiry })
+  });
+  if(!res.ok){ const e = await res.json().catch(()=>({error:'Error'})); alert(e.error||'Error'); return; }
+  document.getElementById('in_name').value='';
+  document.getElementById('in_qty').value='';
+  document.getElementById('in_exp').value='';
+  refresh();
+}
+
+async function stockOut() {
+  const name = document.getElementById('out_name').value;
+  const quantity = parseInt(document.getElementById('out_qty').value || '0', 10);
+  if(!name || !quantity){ alert('Select item and qty'); return; }
+  const res = await fetch('/api/stock-out', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ name, quantity })
+  });
+  if(!res.ok){ const e = await res.json().catch(()=>({error:'Error'})); alert(e.error||'Error'); return; }
+  document.getElementById('out_qty').value='';
+  refresh();
+}
+
+refresh();
+</script>
+</body>
+</html>
